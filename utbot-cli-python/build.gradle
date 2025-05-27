@@ -1,0 +1,69 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+tasks.withType(KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17
+        freeCompilerArgs += ["-Xallow-result-return-type", "-Xsam-conversions=class"]
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+configurations {
+    fetchInstrumentationJar
+}
+
+dependencies {
+    implementation project(':utbot-framework')
+    implementation project(':utbot-python')
+
+    implementation group: 'io.github.microutils', name: 'kotlin-logging', version: kotlinLoggingVersion
+    implementation group: 'com.github.ajalt.clikt', name: 'clikt', version: cliktVersion
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: log4j2Version
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: log4j2Version
+}
+
+processResources {
+    from(configurations.fetchInstrumentationJar) {
+        into "lib"
+    }
+}
+
+tasks.register('createProperties') {
+    dependsOn processResources
+    doLast {
+        new File("$buildDir/resources/main/version.properties").withWriter { w ->
+            Properties properties = new Properties()
+            //noinspection GroovyAssignabilityCheck
+            properties['version'] = project.version.toString()
+            properties.store w, null
+        }
+    }
+}
+
+classes {
+    dependsOn createProperties
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'org.utbot.cli.language.python.ApplicationKt'
+        attributes 'Bundle-SymbolicName': 'org.utbot.cli.language.python'
+        attributes 'Bundle-Version': "${project.version}"
+        attributes 'Implementation-Title': 'UtBot Python CLI'
+        attributes 'JAR-Type': 'Fat JAR'
+    }
+
+    archiveVersion.set(project.version as String)
+
+    dependsOn configurations.runtimeClasspath
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
